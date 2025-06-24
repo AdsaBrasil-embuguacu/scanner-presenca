@@ -106,21 +106,24 @@
       requestAnimationFrame(tick);
     }
 
-fetch("https://script.google.com/macros/s/AKfycbzALi__e0yvSflolKjRg7KAcDDcOjx6USOGJZVeBIOWH8OJs5ecQgopJTHS8nTEJiP_/exec", {
-  method: "POST",
-  body: JSON.stringify({ qr: data }),
-  headers: {
-    "Content-Type": "application/json"
-  }
-})
-.then(res => res.text())
-.then(resp => {
-  resultado.innerText = resp;
-  novoBotao.style.display = 'block';
-})
-.catch(err => {
-  resultado.innerText = "Erro ao registrar: " + err;
-});
+function processarQRCode(data) {
+  fetch("https://script.google.com/macros/s/AKfycbzALi__e0yvSflolKjRg7KAcDDcOjx6USOGJZVeBIOWH8OJs5ecQgopJTHS8nTEJiP_/exec", {
+    method: "POST",
+    body: JSON.stringify({ qr: data }),
+    headers: {
+      "Content-Type": "application/json"
+    }
+  })
+  .then(res => res.text())
+  .then(resp => {
+    resultado.innerText = resp;
+    novoBotao.style.display = 'block';
+  })
+  .catch(err => {
+    resultado.innerText = "Erro ao registrar: " + err;
+  });
+}
+
 
 
     function recarregarLeitor() {
