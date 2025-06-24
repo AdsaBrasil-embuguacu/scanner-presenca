@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Leitor de QR Code - Presença na Ceia</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f0f2f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px 15px;
+    }
+    .container {
+      background: #ffffff;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    h2 {
+      margin-bottom: 25px;
+      color: #2c3e50;
+      font-size: 1.8em;
+    }
+    video {
+      width: 100%;
+      max-width: 400px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+    canvas { display: none; }
+    button {
+      margin-top: 20px;
+      padding: 14px 25px;
+      font-size: 1em;
+      background-color: #007BFF;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    button:hover {
+      background-color: #0056b3;
+      transform: translateY(-2px);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    #resultado {
+      margin-top: 20px;
+      font-size: 1.1em;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>📷 Leitor de QR Code</h2>
+    <video id="video" autoplay></video>
+    <canvas id="canvas"></canvas>
+    <div id="resultado">Aguardando leitura do QR Code...</div>
+    <button id="novoBotao" style="display:none;" onclick="recarregarLeitor()">🔄 Fazer nova leitura</button>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvasElement = document.getElementById('canvas');
+    const canvas = canvasElement.getContext('2d');
+    const resultado = document.getElementById('resultado');
+    const novoBotao = document.getElementById('novoBotao');
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => { resultado.innerText = "Erro ao acessar a câmera: " + err; });
+
+    function tick() {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvasElement.width = video.videoWidth;
+        canvasElement.height = video.videoHeight;
+        canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+        const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code) {
+          resultado.innerText = "QR detectado. Validando...";
+          video.pause();
+          processarQRCode(code.data);
+          return;
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+
+fetch("https://script.google.com/macros/s/AKfycbzALi__e0yvSflolKjRg7KAcDDcOjx6USOGJZVeBIOWH8OJs5ecQgopJTHS8nTEJiP_/exec", {
+  method: "POST",
+  body: JSON.stringify({ qr: data }),
+  headers: {
+    "Content-Type": "application/json"
+  }
+})
+.then(res => res.text())
+.then(resp => {
+  resultado.innerText = resp;
+  novoBotao.style.display = 'block';
+})
+.catch(err => {
+  resultado.innerText = "Erro ao registrar: " + err;
+});
+
+
+    function recarregarLeitor() {
+      resultado.innerText = "Aguardando leitura do QR Code...";
+      novoBotao.style.display = 'none';
+      video.play();
+      requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
