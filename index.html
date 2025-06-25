@@ -67,6 +67,37 @@
       font-size: 1.1em;
       color: #333;
     }
+
+    /* Modal de erro */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    .modal-box {
+      background: #fff;
+      padding: 30px 20px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 350px;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    .modal-icon {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+    .modal-text {
+      font-size: 1.2em;
+      margin-bottom: 20px;
+      color: #333;
+    }
   </style>
 </head>
 <body>
@@ -78,60 +109,98 @@
     <button id="novoBotao" style="display:none;" onclick="recarregarLeitor()">🔄 Fazer nova leitura</button>
   </div>
 
- <script>
-  const video = document.getElementById('video');
-  const canvasElement = document.getElementById('canvas');
-  const canvas = canvasElement.getContext('2d');
-  const resultado = document.getElementById('resultado');
-  const novoBotao = document.getElementById('novoBotao');
+  <!-- Modal de erro -->
+  <div id="modalErro" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-icon" id="modalIcon">⚠️</div>
+      <div class="modal-text" id="modalTexto">Mensagem</div>
+      <button onclick="fecharModalErro()">OK</button>
+    </div>
+  </div>
 
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-    .then(stream => { video.srcObject = stream; })
-    .catch(err => { resultado.innerText = "Erro ao acessar a câmera: " + err; });
+  <script>
+    const video = document.getElementById('video');
+    const canvasElement = document.getElementById('canvas');
+    const canvas = canvasElement.getContext('2d');
+    const resultado = document.getElementById('resultado');
+    const novoBotao = document.getElementById('novoBotao');
+    let leituraEmAndamento = false;
 
-  function tick() {
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      canvasElement.width = video.videoWidth;
-      canvasElement.height = video.videoHeight;
-      canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
-      const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      if (code) {
-        resultado.innerText = "QR detectado. Validando...";
-        video.pause();
-        processarQRCode(code.data);
-        return;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => { resultado.innerText = "Erro ao acessar a câmera: " + err; });
+
+    function tick() {
+      if (video.readyState === video.HAVE_ENOUGH_DATA && !leituraEmAndamento) {
+        canvasElement.width = video.videoWidth;
+        canvasElement.height = video.videoHeight;
+        canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+        const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+        if (code) {
+          leituraEmAndamento = true;
+          video.pause();
+
+          const conteudo = code.data.trim();
+          const partes = conteudo.split("|");
+          if (partes.length === 3) {
+            const [id, nome, dataStr] = partes;
+            const confirmacao = confirm(`Confirmar presença para:\n\n👤 ${nome}\n📅 Data: ${dataStr}?`);
+            if (confirmacao) {
+              resultado.innerText = "Enviando presença...";
+              processarQRCode(code.data);
+            } else {
+              leituraEmAndamento = false;
+              video.play();
+              requestAnimationFrame(tick);
+            }
+          } else {
+            mostrarModalErro("⚠️", "QR inválido.");
+          }
+          return;
+        }
       }
+      requestAnimationFrame(tick);
     }
+
+    function processarQRCode(data) {
+      google.script.run.withSuccessHandler(function (resp) {
+        if (resp.includes("⚠️")) {
+          mostrarModalErro("⚠️", resp);
+        } else if (resp.includes("❌")) {
+          mostrarModalErro("❌", resp);
+        } else {
+          resultado.innerText = resp;
+          novoBotao.style.display = 'block';
+        }
+      }).withFailureHandler(function (err) {
+        mostrarModalErro("❌", "Erro: " + err.message);
+      }).registrarPresencaPorQR(data);
+    }
+
+    function recarregarLeitor() {
+      resultado.innerText = "Aguardando leitura do QR Code...";
+      novoBotao.style.display = 'none';
+      leituraEmAndamento = false;
+      video.play();
+      requestAnimationFrame(tick);
+    }
+
+    function mostrarModalErro(icone, mensagem) {
+      document.getElementById('modalIcon').innerText = icone;
+      document.getElementById('modalTexto').innerText = mensagem;
+      document.getElementById('modalErro').style.display = 'flex';
+    }
+
+    function fecharModalErro() {
+      document.getElementById('modalErro').style.display = 'none';
+      leituraEmAndamento = false;
+      video.play();
+      requestAnimationFrame(tick);
+    }
+
     requestAnimationFrame(tick);
-  }
-
-  function processarQRCode(data) {
-    fetch("https://script.google.com/macros/s/AKfycbzALi__e0yvSflolKjRg7KAcDDcOjx6USOGJZVeBIOWH8OJs5ecQgopJTHS8nTEJiP_/exec", {
-      method: "POST",
-      body: JSON.stringify({ qr: data }),
-      headers: {
-        "Content-Type": "application/json"
-      }
-    })
-    .then(res => res.text())
-    .then(resp => {
-      resultado.innerText = resp;
-      novoBotao.style.display = 'block';
-    })
-    .catch(err => {
-      resultado.innerText = "Erro ao registrar: " + err;
-      novoBotao.style.display = 'block';
-    });
-  }
-
-  function recarregarLeitor() {
-    resultado.innerText = "Aguardando leitura do QR Code...";
-    novoBotao.style.display = 'none';
-    video.play();
-    requestAnimationFrame(tick);
-  }
-
-  // Iniciar leitura
-  requestAnimationFrame(tick);
-</script>
+  </script>
+</body>
+</html>
